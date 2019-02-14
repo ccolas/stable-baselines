@@ -33,6 +33,7 @@ class BaseRLModel(ABC):
         else:
             self.policy = policy
         self.env = env
+        self.eval_env = None
         self.verbose = verbose
         self._requires_vec_env = requires_vec_env
         self.policy_kwargs = {} if policy_kwargs is None else policy_kwargs
@@ -47,6 +48,7 @@ class BaseRLModel(ABC):
                 if self.verbose >= 1:
                     print("Creating environment from the given name, wrapped in a DummyVecEnv.")
                 self.env = env = DummyVecEnv([lambda: gym.make(env)])
+                self.eval_env = DummyVecEnv([lambda: gym.make(env)])
 
             self.observation_space = env.observation_space
             self.action_space = env.action_space
@@ -59,6 +61,7 @@ class BaseRLModel(ABC):
                 if isinstance(env, VecEnv):
                     if env.num_envs == 1:
                         self.env = _UnvecWrapper(env)
+                        self.eval_env = _UnvecWrapper(env)
                         self._vectorize_action = True
                     else:
                         raise ValueError("Error: the model requires a non vectorized environment or a single vectorized"
