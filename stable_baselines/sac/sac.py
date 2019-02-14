@@ -63,12 +63,12 @@ class SAC(OffPolicyRLModel):
         Note: this has no effect on SAC logging for now
     """
 
-    def __init__(self, policy, env, gamma=0.99, learning_rate=3e-4, replay_buffer=ReplayBuffer(500000),
+    def __init__(self, policy, env, eval_env, gamma=0.99, learning_rate=3e-4, replay_buffer=ReplayBuffer(500000),
                  learning_starts=100, train_freq=1, eval_freq=100, nb_eval_rollouts=20, batch_size=64, tau=0.005, ent_coef='auto',
                  target_update_interval=1, gradient_steps=1, target_entropy='auto', verbose=0,
                  tensorboard_log=None, _init_setup_model=True, policy_kwargs=None, full_tensorboard_log=False):
 
-        super(SAC, self).__init__(policy=policy, env=env, replay_buffer=None, verbose=verbose,
+        super(SAC, self).__init__(policy=policy, env=env, eval_env=eval_env, replay_buffer=None, verbose=verbose,
                                   policy_base=SACPolicy, requires_vec_env=False, policy_kwargs=policy_kwargs)
 
         self.replay_buffer = replay_buffer
