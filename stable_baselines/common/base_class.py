@@ -21,19 +21,21 @@ class BaseRLModel(ABC):
     :param policy: (BasePolicy) Policy object
     :param env: (Gym environment) The environment to learn from
                 (if registered in Gym, can be str. Can be None for loading trained models)
+    :param eval_env: (Gym environment) The environment to learn from
+            (if registered in Gym, can be str.)
     :param verbose: (int) the verbosity level: 0 none, 1 training information, 2 tensorflow debug
     :param requires_vec_env: (bool) Does this model require a vectorized environment
     :param policy_base: (BasePolicy) the base policy used by this method
     :param policy_kwargs: (dict) Keywords arguments that will be passed to the policy
     """
 
-    def __init__(self, policy, env, verbose=0, *, requires_vec_env, policy_base, policy_kwargs=None):
+    def __init__(self, policy, env, eval_env, verbose=0, *, requires_vec_env, policy_base, policy_kwargs=None):
         if isinstance(policy, str):
             self.policy = get_policy_from_name(policy_base, policy)
         else:
             self.policy = policy
         self.env = env
-        self.eval_env = None
+        self.eval_env = eval_env
         self.verbose = verbose
         self._requires_vec_env = requires_vec_env
         self.policy_kwargs = {} if policy_kwargs is None else policy_kwargs
@@ -48,7 +50,7 @@ class BaseRLModel(ABC):
                 if self.verbose >= 1:
                     print("Creating environment from the given name, wrapped in a DummyVecEnv.")
                 self.env = env = DummyVecEnv([lambda: gym.make(env)])
-                self.eval_env = DummyVecEnv([lambda: gym.make(env)])
+                self.eval_env = DummyVecEnv([lambda: gym.make(eval_env)])
 
             self.observation_space = env.observation_space
             self.action_space = env.action_space
@@ -61,7 +63,7 @@ class BaseRLModel(ABC):
                 if isinstance(env, VecEnv):
                     if env.num_envs == 1:
                         self.env = _UnvecWrapper(env)
-                        self.eval_env = _UnvecWrapper(env)
+                        self.eval_env = _UnvecWrapper(eval_env)
                         self._vectorize_action = True
                     else:
                         raise ValueError("Error: the model requires a non vectorized environment or a single vectorized"
@@ -485,14 +487,16 @@ class OffPolicyRLModel(BaseRLModel):
     :param policy: (BasePolicy) Policy object
     :param env: (Gym environment) The environment to learn from
                 (if registered in Gym, can be str. Can be None for loading trained models)
+    :param eval_env: (Gym environment) The environment to learn from
+                (if registered in Gym, can be str.)
     :param replay_buffer: (ReplayBuffer) the type of replay buffer
     :param verbose: (int) the verbosity level: 0 none, 1 training information, 2 tensorflow debug
     :param requires_vec_env: (bool) Does this model require a vectorized environment
     :param policy_base: (BasePolicy) the base policy used by this method
     """
 
-    def __init__(self, policy, env, replay_buffer, verbose=0, *, requires_vec_env, policy_base, policy_kwargs=None):
-        super(OffPolicyRLModel, self).__init__(policy, env, verbose=verbose, requires_vec_env=requires_vec_env,
+    def __init__(self, policy, env, eval_env, replay_buffer, verbose=0, *, requires_vec_env, policy_base, policy_kwargs=None):
+        super(OffPolicyRLModel, self).__init__(policy, env, eval_env, verbose=verbose, requires_vec_env=requires_vec_env,
                                                policy_base=policy_base, policy_kwargs=policy_kwargs)
 
         self.replay_buffer = replay_buffer
