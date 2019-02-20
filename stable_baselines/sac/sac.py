@@ -77,7 +77,7 @@ class SAC(OffPolicyRLModel):
                  learning_starts=100, train_freq=1, eval_freq=50000, nb_eval_rollouts=20, batch_size=64, tau=0.005, ent_coef='auto',
                  target_update_interval=1, gradient_steps=1, target_entropy='auto', verbose=0, return_func='sum',
                  render=False, eval_render=False, tensorboard_log=None, _init_setup_model=True, policy_kwargs=None,
-                 full_tensorboard_log=False):
+                 full_tensorboard_log=False, logdir="./tmp"):
 
         super(SAC, self).__init__(policy=policy, env=env, eval_env=eval_env, replay_buffer=None, verbose=verbose,
                                   policy_base=SACPolicy, requires_vec_env=True, policy_kwargs=policy_kwargs)
@@ -135,6 +135,10 @@ class SAC(OffPolicyRLModel):
         self.processed_obs_ph = None
         self.processed_next_obs_ph = None
         self.log_ent_coef = None
+
+        # setup logging
+        self.logdir = logdir
+        logger.configure(folder=self.logdir, format_strs=["json", "stdout"])
 
         if _init_setup_model:
             self.setup_model()

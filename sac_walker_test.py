@@ -19,19 +19,20 @@ import cProfile
 #   gradient_steps: 1
 #   learning_starts: 1000
 
-cp = cProfile.Profile()
-cp.enable()
+#cp = cProfile.Profile()
+#cp.enable()
 
-n_env = 1
+n_env = 20
 env = SubprocVecEnv([lambda: gym.make('BipedalWalker-v2') for _ in range(n_env)])
 eval_env = SubprocVecEnv([lambda: gym.make('BipedalWalker-v2') for _ in range(n_env)])
 
 model = SAC(MlpPolicy, env, eval_env, verbose=1, learning_starts=1000, tensorboard_log="./sac_walker_tensorboard/",
-            replay_buffer=ReplayBuffer(100000), eval_freq=100000, nb_eval_rollouts=10, learning_rate=0.0003, batch_size=64)
-model.learn(total_timesteps=100000)
+            replay_buffer=ReplayBuffer(100000), eval_freq=100000, nb_eval_rollouts=10, learning_rate=0.0003, batch_size=64,
+            logdir="sac_walker_log/plaf20env")
+model.learn(total_timesteps=1000000)
 model.save("sac_walker")
-cp.disable()
-cp.dump_stats("test_sac_1env.cprof")
+#cp.disable()
+#cp.dump_stats("test_sac_1env.cprof")
 
 # del model # remove to demonstrate saving and loading
 #
