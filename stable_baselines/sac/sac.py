@@ -74,13 +74,13 @@ class SAC(OffPolicyRLModel):
     """
 
     def __init__(self, policy, env, eval_env, gamma=0.99, learning_rate=3e-4, replay_buffer=ReplayBuffer(500000),
-                 learning_starts=100, train_freq=1, eval_freq=10000, nb_eval_rollouts=20, batch_size=64, tau=0.005, ent_coef='auto',
+                 learning_starts=100, train_freq=1, eval_freq=50000, nb_eval_rollouts=20, batch_size=64, tau=0.005, ent_coef='auto',
                  target_update_interval=1, gradient_steps=1, target_entropy='auto', verbose=0, return_func='sum',
                  render=False, eval_render=False, tensorboard_log=None, _init_setup_model=True, policy_kwargs=None,
                  full_tensorboard_log=False):
 
         super(SAC, self).__init__(policy=policy, env=env, eval_env=eval_env, replay_buffer=None, verbose=verbose,
-                                  policy_base=SACPolicy, requires_vec_env=False, policy_kwargs=policy_kwargs)
+                                  policy_base=SACPolicy, requires_vec_env=True, policy_kwargs=policy_kwargs)
 
         self.replay_buffer = replay_buffer
         self.buffer_size = self.replay_buffer._maxsize
@@ -102,7 +102,7 @@ class SAC(OffPolicyRLModel):
         # Inverse of the reward scale
         self.ent_coef = ent_coef
         self.target_update_interval = target_update_interval
-        self.gradient_steps = gradient_steps
+        self.gradient_steps = gradient_steps * self.n_envs
         self.gamma = gamma
 
         self.value_fn = None
@@ -376,19 +376,17 @@ class SAC(OffPolicyRLModel):
             current_lr = self.learning_rate(1)
 
             start_time = time.time()
-            episode_rewards = [[]]
-            obs = self.env.reset()
-            eval_obs = self.eval_env.reset()
+            mb_episode_rewards = [[[]] for _ in range(self.n_envs)]
+            obss = self.env.reset()
             self.episode_reward = np.zeros((1,))
             ep_info_buf = deque(maxlen=100)
             n_updates = 0
             infos_values = []
 
-            env_max_steps = self.env.unwrapped.envs[0]._max_episode_steps
             rollout = 0
-            eval_done = True
-            for step in range(total_timesteps):
-
+            total_cycles = total_timesteps // self.n_envs # a cycle is 1 step in all n_envs
+            for cycle in range(total_cycles):
+                #if (cycle % 1) == 0: print(cycle)
                 if callback is not None:
                     # Only stop training if return value is False, not when it is None. This is for backwards
                     # compatibility with callbacks that have no return statement.
@@ -399,36 +397,38 @@ class SAC(OffPolicyRLModel):
                 # from a uniform distribution for better exploration.
                 # Afterwards, use the learned policy.
                 if self.num_timesteps < self.learning_starts:
-                    action = self.env.action_space.sample()
+                    actions = [self.env.action_space.sample() for _ in range(self.n_envs)]
                     # No need to rescale when sampling random action
-                    rescaled_action = action
+                    rescaled_actions = actions
                 else:
-                    action = self.policy_tf.step(obs[None], deterministic=False).flatten()
+                    actions = [self.policy_tf.step(obs[None], deterministic=False).flatten() for obs in obss]
                     # Rescale from [-1, 1] to the correct bounds
-                    rescaled_action = action * np.abs(self.action_space.low)
+                    rescaled_actions = actions * np.abs(self.action_space.low)
 
-                assert action.shape == self.env.action_space.shape
+                assert actions[0].shape == self.env.action_space.shape
 
-                new_obs, reward, done, info = self.env.step(rescaled_action)
+                new_obss, rewards, dones, infos = self.env.step(rescaled_actions)
 
                 if self.render:
                     self.env.render()
 
                 # Store transition in the replay buffer.
-                self.replay_buffer.add(obs, action, reward, new_obs, float(done))
-                obs = new_obs
+                for obs, action, reward, new_obs, done in zip(obss, actions, rewards, new_obss, dones):
+                    self.replay_buffer.add(obs, action, reward, new_obs, float(done))
+                obss = new_obss
 
                 # Retrieve reward and episode length if using Monitor wrapper
-                maybe_ep_info = info.get('episode')
-                if maybe_ep_info is not None:
-                    ep_info_buf.extend([maybe_ep_info])
+                for info in infos:
+                    maybe_ep_info = info.get('episode')
+                    if maybe_ep_info is not None:
+                        ep_info_buf.append(maybe_ep_info)
 
-                if writer is not None:
-                    # Write reward per episode to tensorboard
-                    ep_reward = np.array([reward]).reshape((1, -1))
-                    ep_done = np.array([done]).reshape((1, -1))
-                    self.episode_reward = total_episode_reward_logger(self.episode_reward, ep_reward,
-                                                                      ep_done, writer, self.num_timesteps)
+                # if writer is not None:
+                #     # Write reward per episode to tensorboard
+                #     ep_reward = np.array([reward]).reshape((1, -1))
+                #     ep_done = np.array([done]).reshape((1, -1))
+                #     self.episode_reward = total_episode_reward_logger(self.episode_reward, ep_reward,
+                #                                                       ep_done, writer, self.num_timesteps)
 
                 if self.num_timesteps % self.train_freq == 0:
                     mb_infos_vals = []
@@ -450,51 +450,71 @@ class SAC(OffPolicyRLModel):
                     if len(mb_infos_vals) > 0:
                         infos_values = np.mean(mb_infos_vals, axis=0)
 
-                self.num_timesteps += 1
-                episode_rewards[-1].append(reward)
-                if done:
-                    rollout += 1
-                    if not isinstance(self.env, VecEnv):
-                        obs = self.env.reset()
-                    episode_rewards.append([])
+                self.num_timesteps += self.n_envs
+                for i, reward in enumerate(rewards):
+                    mb_episode_rewards[i][-1].append(reward)
+
+                for i, done in enumerate(dones):
+                    if done:
+                        mb_episode_rewards[i].append([])
+                        rollout += 1
+                if not isinstance(self.env, VecEnv):
+                    obss = self.env.reset()
 
                 # perform evaluation
-                if eval_done and self.num_timesteps % self.eval_freq == 0:
-                    eval_episode_rewards = [[]]
+                if self.num_timesteps % self.eval_freq == 0:
+                    eval_obss = self.eval_env.reset()
+                    mb_eval_episode_rewards = [[[]] for _ in range(self.n_envs)]
                     eval_rollouts = 0
                     while eval_rollouts < self.nb_eval_rollouts:
-                        eval_action = self.policy_tf.step(eval_obs[None], deterministic=True).flatten()  # use deterministic actions
+                        # use deterministic actions
+                        eval_actions = [self.policy_tf.step(eval_obs[None], deterministic=True).flatten() for eval_obs in eval_obss]
                         # Rescale from [-1, 1] to the correct bounds
-                        eval_rescaled_action = eval_action * np.abs(self.action_space.low)
-                        assert eval_action.shape == self.env.action_space.shape
+                        eval_rescaled_actions = eval_actions * np.abs(self.action_space.low)
+                        assert eval_actions[0].shape == self.env.action_space.shape
 
-                        eval_obs, eval_reward, eval_done, eval_info = self.eval_env.step(eval_rescaled_action)
-                        eval_episode_rewards[-1].append(eval_reward)
+                        eval_obss, eval_rewards, eval_dones, eval_infos = self.eval_env.step(eval_rescaled_actions)
+                        for i,eval_reward in enumerate(eval_rewards):
+                            mb_eval_episode_rewards[i][-1].append(eval_reward)
+
 
                         if self.eval_render:
                             self.eval_env.render()
 
-                        if eval_done:
-                            eval_rollouts += 1
-                            if not isinstance(self.env, VecEnv):
-                                obs = self.eval_env.reset()
-                            eval_episode_rewards.append([])
+                        for i, eval_done in enumerate(eval_dones):
+                            if eval_done:
+                                mb_eval_episode_rewards[i].append([])
+                                eval_rollouts += 1
+
+                        if not isinstance(self.eval_env, VecEnv):
+                            if eval_dones:
+                                eval_obss = self.eval_env.reset()
+
+
                     eval_returns = []
-                    for ep_rew in eval_episode_rewards[:-1]:
+                    all_eval_episode_rewards = []
+                    for eval_episode_rewards in mb_eval_episode_rewards:
+                        all_eval_episode_rewards.extend(eval_episode_rewards[:-1])
+
+                    for ep_rew in all_eval_episode_rewards[:-1]:
                         eval_returns.append(compute_return(ep_rew, return_func=self.return_func))
                     eval_mean_reward = round(float(np.mean(eval_returns)))
 
-                    if len(episode_rewards[-101:-1]) == 0:
+                    all_train_episode_rewards = []
+                    for episode_rewards in mb_episode_rewards:
+                        all_train_episode_rewards.extend(episode_rewards[:-1])
+                    if len(all_train_episode_rewards[-101:-1]) == 0:
                         mean_reward = -np.inf
                     else:
                         returns = []
-                        for ep_rew in episode_rewards[-101:-1]:
+                        for ep_rew in all_train_episode_rewards[-101:-1]:
                             returns.append(compute_return(ep_rew, return_func=self.return_func))
                         mean_reward = round(float(np.mean(returns)), 1)
 
-                    num_episodes = len(episode_rewards) - 1
+                    num_episodes = len(all_train_episode_rewards) - 1
+                    assert num_episodes == (rollout - 1)
                     # Display training infos
-                    if self.verbose >= 1 and done and eval_done:
+                    if self.verbose >= 1:
                         fps = int(self.num_timesteps / (time.time() - start_time))
                         logger.logkv("episodes", num_episodes)
                         logger.logkv("mean 100 episode reward", mean_reward)
@@ -576,7 +596,7 @@ class SAC(OffPolicyRLModel):
         self._save_to_file(save_path, data=data, params=params + target_params)
 
     @classmethod
-    def load(cls, load_path, env=None, **kwargs):
+    def load(cls, load_path, env=None, eval_env=None, **kwargs):
         data, params = cls._load_from_file(load_path)
 
         if 'policy_kwargs' in kwargs and kwargs['policy_kwargs'] != data['policy_kwargs']:
