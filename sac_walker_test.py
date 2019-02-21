@@ -11,10 +11,16 @@ import click
 
 @click.command()
 @click.option('--env', type=str, default='BipedalWalker-v2', help='the name of the OpenAI Gym environment that you want to train on')
-@click.option('--logdir', type=str, default='sac_default_log/log', help='the path to where data should go.')
+@click.option('--logdir', type=str, default='sac_default_log/', help='the directory to where data should go.')
+@click.option('--exp_name', type=str, default='default', help='the file to where data should go.')
 @click.option('--n_env', type=int, default=1, help='the number of vectorized envs')
-def main(env, logdir, n_env):
-    print("launching sac with {} envs, logs in {}, env {}".format(n_env, logdir, env))
+@click.option('--buffer_size', type=int, default=1e6, help='buffer size')
+@click.option('--eval_freq', type=int, default=100000, help='how often do we perform evaluation')
+@click.option('--total_timesteps', type=int, default=100000, help='number of total environment steps')
+@click.option('--nb_eval_rollouts', type=int, default=10, help='number of total eval episodes')
+def main(env, logdir, n_env, buffer_size, eval_freq, total_timesteps, nb_eval_rollouts, exp_name):
+    print("launching sac with env {}, logs in {}, n_env {} bufsize {} eval_freq {} total_timesteps {} nb eval rols {} e_name {}"
+          .format(env, logdir, n_env, buffer_size, eval_freq, total_timesteps, nb_eval_rollouts, exp_name))
     #
     # BipedalWalker-v2:
     #   n_timesteps: !!float 1e6
@@ -34,9 +40,9 @@ def main(env, logdir, n_env):
     eval_env = SubprocVecEnv([lambda: gym.make('BipedalWalker-v2') for _ in range(n_env)])
 
     model = SAC(MlpPolicy, env, eval_env, verbose=1, learning_starts=1000, tensorboard_log="./sac_walker_tensorboard/",
-                replay_buffer=ReplayBuffer(200000), eval_freq=200000, nb_eval_rollouts=40, learning_rate=0.0003, batch_size=64,
-                logdir="sac_walker_log/plaf20env")
-    model.learn(total_timesteps=2000000)
+                replay_buffer=ReplayBuffer(buffer_size), eval_freq=eval_freq, nb_eval_rollouts=nb_eval_rollouts,
+                learning_rate=0.0003, batch_size=64, logdir=logdir+exp_name)
+    model.learn(total_timesteps=total_timesteps)
     model.save("sac_walker")
 
     # cp.disable()
