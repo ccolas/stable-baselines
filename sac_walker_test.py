@@ -6,7 +6,7 @@ from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines import SAC
 from stable_baselines.common.replay_buffer import ReplayBuffer
 from stable_baselines.common.vec_env import SubprocVecEnv
-import cProfile
+#import cProfile
 #
 # BipedalWalker-v2:
 #   n_timesteps: !!float 1e6
@@ -27,9 +27,9 @@ env = SubprocVecEnv([lambda: gym.make('BipedalWalker-v2') for _ in range(n_env)]
 eval_env = SubprocVecEnv([lambda: gym.make('BipedalWalker-v2') for _ in range(n_env)])
 
 model = SAC(MlpPolicy, env, eval_env, verbose=1, learning_starts=1000, tensorboard_log="./sac_walker_tensorboard/",
-            replay_buffer=ReplayBuffer(100000), eval_freq=100000, nb_eval_rollouts=10, learning_rate=0.0003, batch_size=64,
+            replay_buffer=ReplayBuffer(200000), eval_freq=200000, nb_eval_rollouts=40, learning_rate=0.0003, batch_size=64,
             logdir="sac_walker_log/plaf20env")
-model.learn(total_timesteps=1000000)
+model.learn(total_timesteps=2000000)
 model.save("sac_walker")
 #cp.disable()
 #cp.dump_stats("test_sac_1env.cprof")
