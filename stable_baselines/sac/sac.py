@@ -102,7 +102,7 @@ class SAC(OffPolicyRLModel):
         # Inverse of the reward scale
         self.ent_coef = ent_coef
         self.target_update_interval = target_update_interval
-        self.gradient_steps = gradient_steps * self.n_envs
+        self.gradient_steps = gradient_steps #* self.n_envs
         self.gamma = gamma
 
         self.value_fn = None
