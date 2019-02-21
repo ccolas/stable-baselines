@@ -18,9 +18,10 @@ import click
 @click.option('--eval_freq', type=int, default=100000, help='how often do we perform evaluation')
 @click.option('--total_timesteps', type=int, default=100000, help='number of total environment steps')
 @click.option('--nb_eval_rollouts', type=int, default=10, help='number of total eval episodes')
-def main(env, logdir, n_env, buffer_size, eval_freq, total_timesteps, nb_eval_rollouts, exp_name):
-    print("launching sac with env {}, logs in {}, n_env {} bufsize {} eval_freq {} total_timesteps {} nb eval rols {} e_name {}"
-          .format(env, logdir, n_env, buffer_size, eval_freq, total_timesteps, nb_eval_rollouts, exp_name))
+@click.option('--batch_size', type=int, default=64, help='number of batches per upgrade')
+def main(env, logdir, n_env, buffer_size, eval_freq, total_timesteps, nb_eval_rollouts, exp_name, batch_size):
+    print("launching sac with env {}, logs in {}, n_env {} bufsize {} eval_freq {} total_timesteps {} nb eval rols {} e_name {} btchsize {}"
+          .format(env, logdir, n_env, buffer_size, eval_freq, total_timesteps, nb_eval_rollouts, exp_name, batch_size))
     #
     # BipedalWalker-v2:
     #   n_timesteps: !!float 1e6
@@ -41,7 +42,7 @@ def main(env, logdir, n_env, buffer_size, eval_freq, total_timesteps, nb_eval_ro
 
     model = SAC(MlpPolicy, env, eval_env, verbose=1, learning_starts=1000, tensorboard_log="./sac_walker_tensorboard/",
                 replay_buffer=ReplayBuffer(buffer_size), eval_freq=eval_freq, nb_eval_rollouts=nb_eval_rollouts,
-                learning_rate=0.0003, batch_size=64, logdir=logdir+exp_name)
+                learning_rate=0.0003, batch_size=batch_size, logdir=logdir+exp_name)
     model.learn(total_timesteps=total_timesteps)
     model.save("sac_walker")
 
