@@ -7,6 +7,7 @@ from stable_baselines import SAC
 from stable_baselines.common.replay_buffer import ReplayBuffer
 from stable_baselines.common.vec_env import SubprocVecEnv
 import click
+import os
 #import cProfile
 
 @click.command()
@@ -19,9 +20,15 @@ import click
 @click.option('--total_timesteps', type=int, default=100000, help='number of total environment steps')
 @click.option('--nb_eval_rollouts', type=int, default=10, help='number of total eval episodes')
 @click.option('--batch_size', type=int, default=64, help='number of batches per upgrade')
-def main(env_name, logdir, n_envs, buffer_size, eval_freq, total_timesteps, nb_eval_rollouts, exp_name, batch_size):
-    print("launching sac with env {}, logs in {}, n_envs {} bufsize {} eval_freq {} total_timesteps {} nb eval rols {} e_name {} btchsize {}"
-          .format(env_name, logdir, n_envs, buffer_size, eval_freq, total_timesteps, nb_eval_rollouts, exp_name, batch_size))
+@click.option('--gpu_id', type=int, default=-1, help='specific gpu to focus computation on')
+def main(env_name, logdir, n_envs, buffer_size, eval_freq, total_timesteps, nb_eval_rollouts, exp_name, batch_size, gpu_id):
+    print("launching sac with env {}, logs in {}, n_envs {} bufsize {} eval_freq {} total_timesteps {} nb eval rols {} e_name {} btchsize {} gpu {}"
+          .format(env_name, logdir, n_envs, buffer_size, eval_freq, total_timesteps, nb_eval_rollouts, exp_name, batch_size, gpu_id))
+
+    if gpu_id != -1:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+
+
     #
     # BipedalWalker-v2:
     #   n_timesteps: !!float 1e6
