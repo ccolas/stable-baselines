@@ -66,7 +66,7 @@ def main(env_name, logdir, n_envs, buffer_size, eval_freq, total_timesteps, nb_e
                 replay_buffer=ReplayBuffer(buffer_size), eval_freq=eval_freq, nb_eval_rollouts=nb_eval_rollouts,
                 learning_rate=lr, batch_size=batch_size, logdir=logdir+exp_name, policy_kwargs=policy_kwargs,
                 ent_coef=ent_coef)
-    model.learn(total_timesteps=total_timesteps)
+    model.learn(total_timesteps=total_timesteps, seed=int(exp_name))
     model.save("sac_walker")
 
     # cp.disable()
